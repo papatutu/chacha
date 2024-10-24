@@ -1,0 +1,74 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Matches semantic version tags like v1.0.0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+
+      - name: Build binary
+        run: |
+          mkdir -p dist
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o dist/chacha-${{ matrix.goos }}-${{ matrix.goarch }} .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chacha-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/chacha-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+      
+      - name: List files recursively
+        run: ls -R
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        with:
+          files: |
+            dist/chacha-linux-amd64/*
+            dist/chacha-windows-amd64/*
+            dist/chacha-darwin-amd64/*
+            dist/chacha-linux-arm64/*
+            dist/chacha-windows-arm64/*
+            dist/chacha-darwin-arm64/*
